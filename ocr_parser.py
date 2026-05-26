@@ -64,10 +64,23 @@ def parse_screenshot(img: Image.Image) -> list[dict]:
             print(f"  conf={data['conf'][i]:3d}  '{t}'", flush=True)
 
     rows  = _cluster_rows(data)
-    stops = [_parse_row(r) for r in rows]
+    strip_morgen = _detect_morgen_route(rows)
+    if strip_morgen:
+        print("[OCR] Volgende-dag route gedetecteerd – '(morgen)' wordt gefilterd.", flush=True)
+    stops = [_parse_row(r, strip_morgen=strip_morgen) for r in rows]
     stops = [s for s in stops if s is not None]
     _infer_start_end(stops)
     return stops
+
+
+def _has_morgen(row: list[dict]) -> bool:
+    return any(re.search(r"\bmorgen\b", w["text"], re.IGNORECASE) for w in row)
+
+
+def _detect_morgen_route(rows: list[list[dict]]) -> bool:
+    """True als startadres + minstens 2 van de eerste 3 stops '(morgen)' bevatten."""
+    check = rows[:4]
+    return sum(1 for r in check if _has_morgen(r)) >= 3
 
 
 def _infer_start_end(stops: list[dict]) -> None:
@@ -449,13 +462,15 @@ def _parse_row_no_postcode(words: list[dict]) -> dict | None:
     }
 
 
-def _parse_row(words: list[dict]) -> dict | None:
+def _parse_row(words: list[dict], strip_morgen: bool = False) -> dict | None:
     """Parseer één rij naar een stop-dict."""
+    if strip_morgen:
+        words = [w for w in words if not re.search(r"[\(\[]?morgen[\)\]]?", w["text"], re.IGNORECASE)]
     tokens = [w["text"] for w in words]
     pc_idx, pc_val, pc_span = _find_postcode(words)
     print(f"[Row] {tokens}  →  postcode={pc_val}", flush=True)
     if pc_idx is None:
-        return _parse_row_no_postcode(words)
+        return _parse_row_no_postcode(words)  # words zijn al gefilterd als strip_morgen
 
     row_type = _detect_row_type(words)
 
