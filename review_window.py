@@ -1134,3 +1134,11 @@ fetch('{osrm_url}')
         tmp.write(html)
         tmp.close()
         webbrowser.open(f"file:///{tmp.name}")
+
+        # Verwijder het bestand na 60 seconden — browser heeft het dan al geladen
+        def _cleanup(path=tmp.name):
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        threading.Timer(60, _cleanup).start()

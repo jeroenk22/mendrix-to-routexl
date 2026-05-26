@@ -5,8 +5,10 @@ Mendrix → RouteXL  –  hoofdvenster en Mendrix-detectie.
 Start: python main.py
 """
 
+import glob
 import os
 import sys
+import tempfile
 import time
 import threading
 import tkinter as tk
@@ -205,5 +207,16 @@ class App:
 
 
 # ---------------------------------------------------------------------------
+def _cleanup_old_maps() -> None:
+    """Verwijder overgebleven kaart-HTML bestanden van vorige sessies."""
+    pattern = os.path.join(tempfile.gettempdir(), "mendrix_route_*.html")
+    for f in glob.glob(pattern):
+        try:
+            os.unlink(f)
+        except OSError:
+            pass
+
+
 if __name__ == "__main__":
+    _cleanup_old_maps()
     App().run()
