@@ -170,7 +170,7 @@ Write-Step "Snelstartbestand aanmaken..."
 
 $startBat = Join-Path $ScriptDir "start.bat"
 if (-not (Test-Path $startBat)) {
-    $batLines = '@echo off', 'cd /d "%~dp0"', 'python main.py', 'if %errorLevel% neq 0 pause'
+    $batLines = '@echo off', 'cd /d "%~dp0"', 'start pythonw main.py'
     [System.IO.File]::WriteAllLines($startBat, $batLines, [System.Text.Encoding]::ASCII)
     Write-Ok "start.bat aangemaakt -- dubbelklik hierop om de app te starten"
 } else {
