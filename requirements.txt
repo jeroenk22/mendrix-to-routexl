@@ -1,0 +1,6 @@
+pillow>=10.0.0
+pytesseract>=0.3.10
+pywin32>=306
+requests>=2.31.0
+opencv-python>=4.8.0
+keyring>=24.0.0

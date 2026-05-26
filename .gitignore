@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.spec
+
+# Virtuele omgevingen
+.venv/
+venv/
+env/
+
+# IDE / editors
+.vscode/
+.idea/
+*.swp
+
+# Claude Code (project-specifieke AI-instructies, niet relevant voor gebruikers)
+CLAUDE.md
+.claude/
+
+# Lokale debug-bestanden
+*.json
+!package.json
+
+# OS
+Thumbs.db
+.DS_Store
