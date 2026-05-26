@@ -16,6 +16,7 @@ import re
 import tempfile
 import threading
 import tkinter as tk
+from datetime import datetime
 import webbrowser
 from tkinter import ttk, messagebox, simpledialog
 
@@ -39,6 +40,7 @@ class ReviewWindow:
         self.tomtom_key_var    = tk.StringVar(value=load_tomtom_key())
         self.status_var        = tk.StringVar(value="Adressen geocoderen…")
         self._tomtom_incidents: list[dict] = []
+        self._tomtom_fetch_time: str = ""
 
         _user, _pw = load_credentials()
         self.username_var.set(_user)
@@ -829,6 +831,9 @@ class ReviewWindow:
             tt_inc_lbl.config(state="disabled")
             tt_scroll.pack(side="right", fill="y")
             tt_inc_lbl.pack(fill="x", expand=True)
+            tt_footer_lbl = tk.Label(tt_frame, text="", font=("Segoe UI", 7),
+                                     fg="#9CA3AF", bg=BG, anchor="e")
+            tt_footer_lbl.pack(fill="x", pady=(2, 0))
 
             tomtom_wps: list[tuple[float, float, str]] = []
             for wp in waypoints:
@@ -844,7 +849,7 @@ class ReviewWindow:
                 threading.Thread(
                     target=self._fetch_tomtom_traffic,
                     args=(win, tomtom_key, tomtom_wps, start_time,
-                          tomtom_labels, tt_inc_lbl),
+                          tomtom_labels, tt_inc_lbl, tt_footer_lbl),
                     daemon=True,
                 ).start()
             else:
@@ -952,6 +957,7 @@ class ReviewWindow:
         start_time: str,
         tomtom_labels: dict,
         inc_lbl: tk.Label,
+        footer_lbl: tk.Label | None = None,
     ) -> None:
         """Haalt TomTom verkeersdata op en werkt het resultaatscherm bij."""
         def _set_inc(text: str, color: str) -> None:
@@ -995,6 +1001,13 @@ class ReviewWindow:
             inc_color = "#16A34A"
         win.after(0, lambda t=inc_text, c=inc_color: _set_inc(t, c))
 
+        fetch_time = datetime.now().strftime("%d-%m-%Y %H:%M")
+        self._tomtom_fetch_time = fetch_time
+        footer_text = f"Bijgewerkt op {fetch_time}  ·  Bron: TomTom Traffic"
+        if footer_lbl:
+            win.after(0, lambda fl=footer_lbl, ft=footer_text:
+                      fl.winfo_exists() and fl.config(text=ft))
+
     # ------------------------------------------------------------------
     # Kaart genereren (Leaflet / OpenStreetMap, lokale HTML)
     # ------------------------------------------------------------------
@@ -1036,9 +1049,11 @@ class ReviewWindow:
             "?overview=full&geometries=geojson"
         )
 
+        tt_fetch_time = self._tomtom_fetch_time
         incidents_js = "\n".join(
             f"addIncident({inc['lat']}, {inc['lon']}, "
-            f"'{inc['text'].replace(chr(39), ' ')}', {inc['severity']});"
+            f"'{inc['text'].replace(chr(39), ' ')}', {inc['severity']}, "
+            f"'{tt_fetch_time}');"
             for inc in self._tomtom_incidents
         )
 
@@ -1093,14 +1108,17 @@ function addStop(lat, lon, nr, naam, tijd, km) {{
   bounds.push([lat, lon]);
 }}
 
-function addIncident(lat, lon, text, severity) {{
+function addIncident(lat, lon, text, severity, fetchTime) {{
   var color = severity >= 4 ? '#DC2626' : '#D97706';
   var icon = L.divIcon({{
     className: '',
     html: '<div class="incident-icon" style="background:' + color + '">⚠</div>',
     iconSize: [24, 24], iconAnchor: [12, 12], popupAnchor: [0, -13]
   }});
-  L.marker([lat, lon], {{icon: icon}}).bindPopup('<b>⚠ ' + text + '</b>').addTo(map);
+  var footer = fetchTime
+    ? '<hr style="margin:6px 0;border:none;border-top:1px solid #E5E7EB"><span style="font-size:10px;color:#9CA3AF">Bijgewerkt op ' + fetchTime + ' &nbsp;·&nbsp; Bron: TomTom Traffic</span>'
+    : '';
+  L.marker([lat, lon], {{icon: icon}}).bindPopup('<b>⚠ ' + text + '</b>' + footer).addTo(map);
 }}
 
 {markers_js}
