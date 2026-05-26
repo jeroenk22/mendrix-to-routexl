@@ -4,6 +4,20 @@ Desktop-app (Windows) die rijen op het Ritten-scherm van [Mendrix](https://mendr
 
 ---
 
+## Snelle start
+
+> Geen Python of Tesseract? Geen probleem — de installer regelt alles automatisch.
+
+1. Klik rechtsboven op **Code → Download ZIP** en pak het bestand uit
+2. Dubbelklik **`install.bat`**
+3. Klik **Ja** bij de beveiligingsvraag van Windows
+4. Volg de stappen in het installatievenster (duurt 1–3 minuten)
+5. Dubbelklik daarna **`start.bat`** om de app te starten
+
+Je hebt een account bij [RouteXL](https://www.routexl.nl/) nodig. De installer vraagt of je de inloggegevens meteen wilt instellen.
+
+---
+
 ## Werking in het kort
 
 1. Detecteert dat [Mendrix](https://mendrix.nl/) open is en op het Ritten-scherm staat.
