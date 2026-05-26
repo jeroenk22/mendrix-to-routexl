@@ -201,6 +201,64 @@ if %errorLevel% neq 0 pause
 }
 
 # ============================================================
+# 6. RouteXL-inloggegevens instellen (optioneel)
+# ============================================================
+Write-Step "RouteXL-inloggegevens instellen..."
+Write-Host ""
+Write-Host "  Wil je de RouteXL-inloggegevens nu alvast invullen?" -ForegroundColor White
+Write-Host "  (anders vraagt de app ze de eerste keer dat je hem opstart)" -ForegroundColor Gray
+Write-Host ""
+$antwoord = Read-Host "  Inloggegevens nu instellen? (j/n)"
+
+if ($antwoord -match "^[jJyY]") {
+    Write-Host ""
+    $rxUser = Read-Host "  RouteXL gebruikersnaam"
+    $rxPassSecure = Read-Host "  RouteXL wachtwoord" -AsSecureString
+    $rxPass = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
+                  [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($rxPassSecure))
+
+    if ($rxUser -and $rxPass) {
+        # Gebruik Python + keyring — identiek aan hoe de app het zelf opslaat
+        $pyScript = @"
+import json, os, sys
+try:
+    import keyring
+except ImportError:
+    sys.exit('keyring niet beschikbaar')
+
+username = sys.argv[1]
+password = sys.argv[2]
+
+config_dir  = os.path.join(os.path.expanduser('~'), '.mendrix_routexl')
+config_file = os.path.join(config_dir, 'config.json')
+os.makedirs(config_dir, exist_ok=True)
+
+with open(config_file, 'w', encoding='utf-8') as f:
+    json.dump({'username': username}, f)
+
+keyring.set_password('MendrixRouteXL', username, password)
+print('OK')
+"@
+        $tmpPy = "$env:TEMP\save_creds.py"
+        $pyScript | Out-File -FilePath $tmpPy -Encoding utf8
+
+        $result = & $pythonCmd $tmpPy $rxUser $rxPass 2>&1
+        Remove-Item $tmpPy -ErrorAction SilentlyContinue
+
+        if ($LASTEXITCODE -eq 0) {
+            Write-Ok "Inloggegevens opgeslagen (gebruikersnaam in config, wachtwoord in Credential Manager)"
+        } else {
+            Write-Warn "Opslaan mislukt: $result"
+            Write-Warn "Je kunt de gegevens de eerste keer dat je de app opstart alsnog invullen."
+        }
+    } else {
+        Write-Warn "Gebruikersnaam of wachtwoord leeg — overgeslagen."
+    }
+} else {
+    Write-Ok "Overgeslagen — je vult de gegevens in bij het eerste opstarten van de app."
+}
+
+# ============================================================
 # Klaar
 # ============================================================
 Write-Host ""
