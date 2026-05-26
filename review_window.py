@@ -19,9 +19,10 @@ import tkinter as tk
 import webbrowser
 from tkinter import ttk, messagebox, simpledialog
 
-from config import load_credentials, save_credentials
+from config import load_credentials, save_credentials, load_tomtom_key, save_tomtom_key
 from geocoder import geocode
 from routexl_api import build_locations, send_route, format_result, calculate_restrictions, _fmt_arrival
+from tomtom_api import get_route_with_traffic, get_incidents_on_route
 
 PAD = 12
 BG  = "#F5F5F5"
@@ -32,10 +33,12 @@ class ReviewWindow:
         self.parent = parent
         self.stops  = stops
 
-        self.start_time_var = tk.StringVar(value="")
-        self.username_var   = tk.StringVar()
-        self.password_var   = tk.StringVar()
-        self.status_var     = tk.StringVar(value="Adressen geocoderen…")
+        self.start_time_var    = tk.StringVar(value="")
+        self.username_var      = tk.StringVar()
+        self.password_var      = tk.StringVar()
+        self.tomtom_key_var    = tk.StringVar(value=load_tomtom_key())
+        self.status_var        = tk.StringVar(value="Adressen geocoderen…")
+        self._tomtom_incidents: list[dict] = []
 
         _user, _pw = load_credentials()
         self.username_var.set(_user)
@@ -400,6 +403,15 @@ class ReviewWindow:
         ttk.Entry(row, textvariable=self.password_var,
                   show="*", width=22).pack(side="left", padx=(4, 0))
 
+        row2 = tk.Frame(frame, bg=BG)
+        row2.pack(fill="x", pady=(4, 0))
+        tk.Label(row2, text="TomTom API-sleutel:", bg=BG,
+                 font=("Segoe UI", 10), width=16, anchor="w").pack(side="left")
+        ttk.Entry(row2, textvariable=self.tomtom_key_var,
+                  width=46).pack(side="left", padx=(0, 4))
+        tk.Label(row2, text="(optioneel, voor verkeersinfo)",
+                 font=("Segoe UI", 8), fg="#9CA3AF", bg=BG).pack(side="left")
+
     # ------------------------------------------------------------------
     # Footer: knop + status
     # ------------------------------------------------------------------
@@ -638,6 +650,7 @@ class ReviewWindow:
         self._last_start_time = start_time
         self._last_username   = username
         self._last_password   = password
+        self._last_tomtom_key = self.tomtom_key_var.get().strip()
 
         # Tijdvensters per adres (voor resultaatscherm) – zelfde sleutel als build_locations
         windows_map: dict[str, str] = {}
@@ -651,12 +664,15 @@ class ReviewWindow:
                               text="Bezig met verzenden…")
         self.status_var.set("Route verzenden naar RouteXL…")
 
+        tk_key = self.tomtom_key_var.get().strip()
+        save_tomtom_key(tk_key)
+
         def task():
             try:
                 result = send_route(username, password, locations)
                 save_credentials(username, password)
                 self.win.after(0, lambda r=result: self._show_result(
-                    r, start_time, locations, windows_map))
+                    r, start_time, locations, windows_map, tk_key))
             except Exception as e:
                 # Capture nu — Python 3 zet 'e' op None aan het eind van except-blok,
                 # waardoor een gewone lambda altijd str(None)="None" zou tonen.
@@ -678,7 +694,7 @@ class ReviewWindow:
         return h * 60 + m
 
     def _show_result(self, result: dict, start_time: str, locations: list[dict],
-                     windows_map: dict | None = None):
+                     windows_map: dict | None = None, tomtom_key: str = ""):
         self.status_var.set("✓ Route ontvangen van RouteXL")
 
         route    = result.get("route") or {}
@@ -693,7 +709,7 @@ class ReviewWindow:
 
         win = tk.Toplevel(self.win)
         win.title("Geoptimaliseerde route – RouteXL")
-        win.geometry("600x520")
+        win.geometry("640x800")
         win.configure(bg=BG)
         win.resizable(True, True)
 
@@ -727,6 +743,7 @@ class ReviewWindow:
         # distance per waypoint is cumulatief (km vanaf start) → totaal = laatste waarde
         total_km = float(waypoints[-1].get("distance", 0)) if waypoints else 0.0
         late_addresses: set[str] = set()  # adressen >30 min te laat
+        tomtom_labels: dict[str, tk.Label] = {}
 
         for i, wp in enumerate(waypoints):
             arr    = start_min + int(wp.get("arrival", 0))
@@ -784,10 +801,54 @@ class ReviewWindow:
                          font=("Segoe UI", 8), fg=lbl_color, bg=BG, anchor="w"
                          ).pack(fill="x", padx=4)
 
+            if tomtom_key:
+                tt_lbl = tk.Label(inner, text="",
+                                  font=("Segoe UI", 8), fg="#6B7280", bg=BG, anchor="w")
+                tt_lbl.pack(fill="x", padx=16)
+                tomtom_labels[naam] = tt_lbl
+
             tk.Frame(inner, bg="#E5E7EB", height=1).pack(fill="x", padx=4)
 
         tk.Label(outer, text=f"Totaal: {total_km:.1f} km",
                  font=("Segoe UI", 10, "bold"), bg=BG).pack(anchor="e", pady=(6, 0))
+
+        # TomTom verkeerssectie
+        if tomtom_key:
+            tt_frame = tk.LabelFrame(outer, text="🚦 Verkeerssituatie (TomTom)",
+                                      font=("Segoe UI", 9, "bold"),
+                                      bg=BG, padx=8, pady=4)
+            tt_frame.pack(fill="x", pady=(6, 0))
+            tt_scroll = tk.Scrollbar(tt_frame, orient="vertical")
+            tt_inc_lbl = tk.Text(
+                tt_frame, height=5, font=("Segoe UI", 9), fg="#9CA3AF", bg=BG,
+                wrap="word", relief="flat", bd=0, cursor="arrow",
+                yscrollcommand=tt_scroll.set,
+            )
+            tt_scroll.config(command=tt_inc_lbl.yview)
+            tt_inc_lbl.insert(1.0, "Verkeersinformatie laden…")
+            tt_inc_lbl.config(state="disabled")
+            tt_scroll.pack(side="right", fill="y")
+            tt_inc_lbl.pack(fill="x", expand=True)
+
+            tomtom_wps: list[tuple[float, float, str]] = []
+            for wp in waypoints:
+                wp_naam = wp.get("name", "")
+                coord   = coord_map.get(wp_naam)
+                if coord:
+                    try:
+                        tomtom_wps.append((float(coord[0]), float(coord[1]), wp_naam))
+                    except (ValueError, TypeError):
+                        pass
+
+            if len(tomtom_wps) >= 2:
+                threading.Thread(
+                    target=self._fetch_tomtom_traffic,
+                    args=(win, tomtom_key, tomtom_wps, start_time,
+                          tomtom_labels, tt_inc_lbl),
+                    daemon=True,
+                ).start()
+            else:
+                tt_inc_lbl.config(text="Onvoldoende coördinaten voor TomTom.")
 
         # Forceer-knop als er stops >30 min te laat zijn
         if late_addresses:
@@ -833,6 +894,7 @@ class ReviewWindow:
         start_time = getattr(self, "_last_start_time", "")
         username   = getattr(self, "_last_username",   "")
         password   = getattr(self, "_last_password",   "")
+        tk_key     = getattr(self, "_last_tomtom_key", "")
 
         if not ordered:
             return
@@ -867,7 +929,7 @@ class ReviewWindow:
             try:
                 result = send_route(username, password, locations)
                 self.win.after(0, lambda r=result: self._show_result(
-                    r, start_time, locations, windows_map))
+                    r, start_time, locations, windows_map, tk_key))
             except Exception as e:
                 msg = str(e)
                 self.win.after(0, lambda m=msg: messagebox.showerror(
@@ -877,6 +939,61 @@ class ReviewWindow:
                     state="normal", text="🚀   Doorzetten naar RouteXL"))
 
         threading.Thread(target=task, daemon=True).start()
+
+    # ------------------------------------------------------------------
+    # TomTom verkeersinformatie ophalen (achtergrond-thread)
+    # ------------------------------------------------------------------
+
+    def _fetch_tomtom_traffic(
+        self,
+        win: tk.Toplevel,
+        api_key: str,
+        waypoints: list[tuple[float, float, str]],
+        start_time: str,
+        tomtom_labels: dict,
+        inc_lbl: tk.Label,
+    ) -> None:
+        """Haalt TomTom verkeersdata op en werkt het resultaatscherm bij."""
+        def _set_inc(text: str, color: str) -> None:
+            if not inc_lbl.winfo_exists():
+                return
+            inc_lbl.config(state="normal")
+            inc_lbl.delete(1.0, tk.END)
+            inc_lbl.insert(1.0, text)
+            inc_lbl.config(state="disabled", fg=color)
+
+        try:
+            traffic   = get_route_with_traffic(api_key, waypoints, start_time)
+            incidents = get_incidents_on_route(api_key, waypoints)
+        except Exception as e:
+            err = str(e)
+            win.after(0, lambda: _set_inc(f"TomTom niet beschikbaar: {err}", "#DC2626"))
+            return
+
+        for entry in traffic:
+            lbl = tomtom_labels.get(entry["address"])
+            if not lbl:
+                continue
+            delay_min = round(entry["delay_sec"] / 60)
+            if delay_min >= 20:
+                text, color = f"🚗 TomTom: +{delay_min} min file op dit traject", "#DC2626"
+            elif delay_min >= 5:
+                text, color = f"🚗 TomTom: +{delay_min} min file op dit traject", "#D97706"
+            elif delay_min > 0:
+                text, color = f"🚗 TomTom: +{delay_min} min", "#6B7280"
+            else:
+                text, color = "🚗 TomTom: geen file", "#16A34A"
+            win.after(0, lambda l=lbl, t=text, c=color:
+                      l.winfo_exists() and l.config(text=t, fg=c))
+
+        self._tomtom_incidents = incidents
+        if incidents:
+            inc_text  = "\n".join(f"• {inc['text']}" for inc in incidents)
+            inc_color = "#DC2626"
+        else:
+            inc_text  = "✓ Geen incidenten in het routegebied"
+            inc_color = "#16A34A"
+        win.after(0, lambda t=inc_text, c=inc_color: _set_inc(t, c))
 
     # ------------------------------------------------------------------
     # Kaart genereren (Leaflet / OpenStreetMap, lokale HTML)
@@ -919,6 +1036,12 @@ class ReviewWindow:
             "?overview=full&geometries=geojson"
         )
 
+        incidents_js = "\n".join(
+            f"addIncident({inc['lat']}, {inc['lon']}, "
+            f"'{inc['text'].replace(chr(39), ' ')}', {inc['severity']});"
+            for inc in self._tomtom_incidents
+        )
+
         html = f"""<!DOCTYPE html>
 <html lang="nl">
 <head>
@@ -938,6 +1061,10 @@ class ReviewWindow:
                border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }}
   .stop-icon.first {{ background: #16A34A; }}
   .stop-icon.last  {{ background: #DC2626; }}
+  .incident-icon {{ color: #fff; border-radius: 4px; width: 24px; height: 24px;
+               display: flex; align-items: center; justify-content: center;
+               font-size: 14px; border: 2px solid #fff;
+               box-shadow: 0 1px 4px rgba(0,0,0,.4); }}
 </style>
 </head>
 <body>
@@ -966,7 +1093,18 @@ function addStop(lat, lon, nr, naam, tijd, km) {{
   bounds.push([lat, lon]);
 }}
 
+function addIncident(lat, lon, text, severity) {{
+  var color = severity >= 4 ? '#DC2626' : '#D97706';
+  var icon = L.divIcon({{
+    className: '',
+    html: '<div class="incident-icon" style="background:' + color + '">⚠</div>',
+    iconSize: [24, 24], iconAnchor: [12, 12], popupAnchor: [0, -13]
+  }});
+  L.marker([lat, lon], {{icon: icon}}).bindPopup('<b>⚠ ' + text + '</b>').addTo(map);
+}}
+
 {markers_js}
+{incidents_js}
 map.fitBounds(bounds, {{padding: [40, 40]}});
 
 // Haal weggebaseerde route op via OSRM
