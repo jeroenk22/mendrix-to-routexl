@@ -16,6 +16,10 @@ Desktop-app (Windows) die rijen op het Ritten-scherm van [Mendrix](https://mendr
 
 Je hebt een account bij [RouteXL](https://www.routexl.nl/) nodig. De installer vraagt of je de inloggegevens meteen wilt instellen.
 
+### Updates installeren
+
+Dubbelklik **`update.bat`** — de app download en installeert de laatste versie automatisch. Je instellingen en opgeslagen wachtwoorden blijven intact.
+
 ---
 
 ## Werking in het kort
@@ -78,9 +82,9 @@ Dubbelklik dan op `start.bat` om de app te starten zonder een terminal open te l
    - Vink stops aan of uit met de checkboxes.
    - Wijzig de **Handelingstijd** per stop (standaard 5 min).
    - Ontbreekt het start- of eindadres? Gebruik de **+ Invoeren**-knop.
-5. **[RouteXL](https://www.routexl.nl/)-inloggegevens invoeren** (zie sectie hieronder).
-6. De knop **Doorzetten naar [RouteXL](https://www.routexl.nl/)** wordt groen zodra alle adressen geocodeerd zijn — klik hem om de route te versturen.
-7. Het resultaatscherm toont de geoptimaliseerde volgorde met aankomsttijden en een interactieve kaart.
+5. **RouteXL- en optioneel TomTom-inloggegevens invoeren** (zie secties hieronder).
+6. De knop **Doorzetten naar RouteXL** wordt groen zodra alle adressen geocodeerd zijn — klik hem om de route te versturen.
+7. Het resultaatscherm toont de geoptimaliseerde volgorde met aankomsttijden, file-informatie per stop en een interactieve kaart met eventuele incidentmarkers.
 
 ---
 
@@ -98,6 +102,21 @@ De app heeft een account bij [RouteXL](https://www.routexl.nl/) nodig om routes 
    - **Wachtwoord** → Windows Credential Manager (versleuteld via `keyring`)
 
 De volgende keer worden de gegevens automatisch ingevuld.
+
+---
+
+## TomTom verkeersinfo (optioneel)
+
+Na de routeberekening toont de app per stop hoeveel minuut file er op het traject staat, en worden actieve incidenten (afsluitingen, ongelukken, wegwerkzaamheden) als markers op de kaart getoond.
+
+### API-sleutel aanvragen
+
+1. Maak een gratis account aan op [developer.tomtom.com](https://developer.tomtom.com)
+2. Maak een nieuwe API-sleutel aan met **Routing API** en **Traffic API** ingeschakeld
+3. Plak de sleutel in het veld **TomTom API-sleutel** in het controlescherm
+4. De sleutel wordt automatisch opgeslagen
+
+Het gratis plan biedt 2.500 verzoeken per dag — meer dan voldoende voor normaal gebruik.
 
 ### Credentials verwijderen
 
@@ -155,4 +174,5 @@ De `.exe` staat daarna in de `dist/`-map. Houd er rekening mee dat Tesseract apa
 - **Pillow** voor screenshots (`ImageGrab`)
 - **pywin32** voor Mendrix-vensterdetectie
 - **PDOK** + **Nominatim** voor geocodering
-- **[RouteXL](https://www.routexl.nl/) API** (`POST /tour/`) voor routeoptimalisatie
+- **[RouteXL](https://www.routexl.nl/) API** (`POST /tour/`) voor routeoptimalisatie met tijdvensters
+- **[TomTom](https://developer.tomtom.com) Routing + Traffic API** voor verkeersvertraging per stop en incidentmeldingen op de kaart (optioneel, gratis plan)
