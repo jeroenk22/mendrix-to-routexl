@@ -2,7 +2,7 @@
 <#
 .SYNOPSIS
     Download en installeer de laatste versie van Mendrix -> RouteXL vanaf GitHub.
-    Overschrijft alleen de Python-bestanden; instellingen en opgeslagen gegevens blijven intact.
+    Overschrijft alleen de Python-bestanden; instellingen blijven intact.
 #>
 
 $ErrorActionPreference = "Stop"
@@ -11,16 +11,12 @@ $ZipUrl = "https://github.com/jeroenk22/mendrix-to-routexl/archive/refs/heads/ma
 $TmpZip = "$env:TEMP\mendrix-update.zip"
 $TmpDir = "$env:TEMP\mendrix-update"
 
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-
 function Write-Step { param($msg) Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Write-Ok   { param($msg) Write-Host "    OK  $msg" -ForegroundColor Green }
 function Write-Warn { param($msg) Write-Host "    >>  $msg" -ForegroundColor Yellow }
 function Write-Err  { param($msg) Write-Host "    !!  $msg" -ForegroundColor Red }
 
-# ============================================================
-# 1. Download nieuwste versie van GitHub
-# ============================================================
+# 1. Download
 Write-Step "Laatste versie downloaden van GitHub..."
 
 try {
@@ -33,22 +29,15 @@ try {
     exit 1
 }
 
-# ============================================================
 # 2. Uitpakken
-# ============================================================
 Write-Step "Uitpakken..."
 
 if (Test-Path $TmpDir) { Remove-Item $TmpDir -Recurse -Force }
 Expand-Archive -Path $TmpZip -DestinationPath $TmpDir
-
-# GitHub pakt altijd uit als <reponaam>-<branch>, bijv. mendrix-to-routexl-main
 $SrcDir = Get-ChildItem -Path $TmpDir -Directory | Select-Object -First 1 -ExpandProperty FullName
 Write-Ok "Uitgepakt"
 
-# ============================================================
-# 3. Python-bestanden kopiëren naar de app-map
-#    Instellingen (~/.mendrix_routexl/config.json) blijven intact
-# ============================================================
+# 3. Bestanden kopieren naar app-map
 Write-Step "Bestanden bijwerken in: $AppDir"
 
 $FilesToCopy = @(
@@ -66,9 +55,7 @@ foreach ($file in $FilesToCopy) {
     }
 }
 
-# ============================================================
-# 4. Eventueel nieuwe pip-pakketten installeren
-# ============================================================
+# 4. Pip-pakketten bijwerken
 Write-Step "Python-pakketten controleren..."
 
 $pythonCmd = $null
@@ -86,19 +73,15 @@ if ($pythonCmd) {
     & $pythonCmd -m pip install -r $reqFile --quiet
     Write-Ok "Pakketten up-to-date"
 } else {
-    Write-Warn "Python niet gevonden – pakketten niet bijgewerkt."
+    Write-Warn "Python niet gevonden - pakketten niet bijgewerkt."
     Write-Warn "Draai install.bat als er problemen zijn bij het starten."
 }
 
-# ============================================================
-# Tijdelijke bestanden opruimen
-# ============================================================
+# Opruimen
 Remove-Item $TmpZip -ErrorAction SilentlyContinue
 Remove-Item $TmpDir -Recurse -Force -ErrorAction SilentlyContinue
 
-# ============================================================
 # Klaar
-# ============================================================
 Write-Host ""
 Write-Host "  ================================================================" -ForegroundColor Green
 Write-Host "   Update voltooid! Start de app opnieuw via start.bat." -ForegroundColor Green
