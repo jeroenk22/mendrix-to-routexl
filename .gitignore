@@ -23,9 +23,10 @@ env/
 CLAUDE.md
 .claude/
 
-# Lokale debug-bestanden
+# Lokale debug-bestanden en door de installer gegenereerde bestanden
 *.json
 !package.json
+start.bat
 
 # OS
 Thumbs.db
